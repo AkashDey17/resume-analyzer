@@ -1,0 +1,304 @@
+   <!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Resume Analyzer + Chat</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600&display=swap');
+
+    :root {
+      --bg: #f0f2f5;
+      --text: #2c3e50;
+      --primary: #f57c06;
+      --hover: #285bb5;
+      --chat-bg: white;
+      --bot-bg: #f7f9fc;
+    }
+    
+    [data-theme="dark"] {
+      --bg: #1f1f1f;
+      --text: #f0f0f0;
+      --primary: #ffa500;
+      --hover: #00bfff;
+      --chat-bg: #2a2a2a;
+      --bot-bg: #3a3a3a;
+    }
+
+    * {
+      font-family: 'Poppins', sans-serif;
+      box-sizing: border-box;
+      transition: background 0.3s, color 0.3s;
+    }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      max-width: 700px;
+      margin: 30px auto;
+      padding: 20px;
+    }
+    h1 {
+      text-align: center;
+    }
+    form > * {
+      display: block;
+      margin-bottom: 10px;
+    }
+    textarea, input[type=file], button {
+      width: 100%;
+      font-size: 16px;
+      padding: 8px;
+    }
+    button {
+      background: var(--primary);
+      color: white;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+    button:hover {
+      background: var(--hover);
+    }
+    #analysis {
+      white-space: pre-wrap;
+      background: var(--chat-bg);
+      padding: 15px;
+      border-radius: 8px;
+      margin-top: 20px;
+      min-height: 150px;
+      border: 1px solid #ccc;
+      position: relative;
+    }
+    .copy-btn,  .theme-toggle {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      background: var(--primary);
+      color: white;
+      border: none;
+      padding: 5px 10px;
+      cursor: pointer;
+      font-size: 12px;
+      margin-left: 5px;
+    }
+    /* .copy-btn{
+        position: absolute;
+      top: 70px;
+      right: 10px;
+    } */
+    .theme-toggle {
+      right: auto;
+      left: 10px;
+    }
+
+    #chatIcon {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      background: #357edd;
+      color: white;
+      width: 56px;
+      height: 56px;
+      border-radius: 50%;
+      font-size: 30px;
+      cursor: pointer;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 3px 8px rgba(0,0,0,0.3);
+      user-select: none;
+      animation: bounceIn 0.5s ease-out;
+    }
+    @keyframes bounceIn {
+      0% { transform: scale(0.2); opacity: 0; }
+      60% { transform: scale(1.1); opacity: 1; }
+      100% { transform: scale(1); }
+    }
+
+    #chatBox {
+      position: fixed;
+      bottom: 90px;
+      right: 20px;
+      width: 360px;
+      max-height: 400px;
+      background: var(--chat-bg);
+      border-radius: 10px;
+      display: none;
+      flex-direction: column;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+    }
+    #chatMessages {
+      flex-grow: 1;
+      padding: 10px;
+      overflow-y: auto;
+      background: var(--bot-bg);
+    }
+    .message {
+      margin-bottom: 10px;
+    }
+    .message.user {
+      text-align: right;
+      font-weight: bold;
+    }
+    .message.bot {
+      text-align: left;
+    }
+    .avatar {
+      display: inline-block;
+      margin-right: 8px;
+      vertical-align: top;
+    }
+    .avatar img {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+    }
+    #chatInputWrapper {
+      display: flex;
+      border-top: 1px solid #ddd;
+    }
+    #chatInput {
+      flex-grow: 1;
+      padding: 10px;
+      border: none;
+      outline: none;
+    }
+    #sendBtn {
+      background: #357edd;
+      border: none;
+      color: white;
+      padding: 0 20px;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+    
+  <h1>📄 AI Resume Analyzer</h1>
+  <form id="uploadForm">
+    <input type="file" id="resumeFile" name="resume" accept=".pdf,.txt" required />
+    <textarea id="jobDescription" name="jobDescription" placeholder="Paste job description here (optional)" rows="5"></textarea>
+    <button type="submit">Analyze Resume</button>
+  </form>
+
+  <pre id="analysis">Upload your resume and optional job description, then click analyze to see AI feedback here.</pre>
+  <p class="copy-btn" onclick="copyToClipboard()">📋 Copy</p>
+ 
+  <h1 class="theme-toggle" onclick="toggleTheme()">🌗 Toggle Theme</h1>
+
+  <div id="chatIcon" title="Chat about your resume">💬</div>
+  <div id="chatBox">
+    <div id="chatMessages"></div>
+    <div id="chatInputWrapper">
+      <input type="text" id="chatInput" placeholder="Ask a question about your resume..." />
+      <button id="sendBtn">Send</button>
+    </div>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script>
+    const uploadForm = document.getElementById('uploadForm');
+    const analysisPre = document.getElementById('analysis');
+    const chatIcon = document.getElementById('chatIcon');
+    const chatBox = document.getElementById('chatBox');
+    const chatMessages = document.getElementById('chatMessages');
+    const chatInput = document.getElementById('chatInput');
+    const sendBtn = document.getElementById('sendBtn');
+    let resumeText = '';
+
+    uploadForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const file = document.getElementById('resumeFile').files[0];
+      if (!file) return alert('Please upload a resume file');
+
+      const formData = new FormData();
+      formData.append('resume', file);
+      formData.append('jobDescription', document.getElementById('jobDescription').value);
+
+      analysisPre.textContent = '⏳ Analyzing resume...';
+
+      try {
+        const res = await fetch('/analyze', { method: 'POST', body: formData });
+        const data = await res.json();
+        analysisPre.textContent = data.analysis || '❌ Error analyzing resume.';
+        resumeText = data.resumeText || '';
+        chatIcon.style.display = 'flex';
+        chatBox.style.display = 'flex';
+      } catch (err) {
+        analysisPre.textContent = '❌ Error analyzing resume.';
+      }
+    });
+
+    chatIcon.addEventListener('click', () => {
+      chatBox.style.display = chatBox.style.display === 'flex' ? 'none' : 'flex';
+    });
+
+    sendBtn.addEventListener('click', sendMessage);
+    chatInput.addEventListener('keydown', e => {
+      if (e.key === 'Enter') sendMessage();
+    });
+
+    async function sendMessage() {
+      const question = chatInput.value.trim();
+      if (!question) return;
+      appendMessage('user', question);
+      chatInput.value = '';
+
+      appendMessage('bot', '⏳ Thinking...');
+      try {
+        const res = await fetch('/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ question, resumeText })
+        });
+        const data = await res.json();
+        removeLastBot();
+        appendMessage('bot', data.answer || '❌ No answer received.');
+      } catch (err) {
+        removeLastBot();
+        appendMessage('bot', '❌ Error getting answer.');
+      }
+    }
+
+    function appendMessage(sender, text) {
+      const div = document.createElement('div');
+      div.className = 'message ' + sender;
+      div.innerHTML = sender === 'bot' ? `
+        <span class="avatar"><img src="https://api.dicebear.com/7.x/bottts/svg?seed=ai" /></span> ${text}` : text;
+      chatMessages.appendChild(div);
+      chatMessages.scrollTop = chatMessages.scrollHeight;
+    }
+
+    function removeLastBot() {
+      const last = chatMessages.querySelector('.bot:last-child');
+      if (last) last.remove();
+    }
+
+    function copyToClipboard() {
+      const text = analysisPre.textContent;
+      navigator.clipboard.writeText(text);
+      alert('Analysis copied to clipboard!');
+    }
+
+    function toggleTheme() {
+      const body = document.body;
+      const current = body.getAttribute('data-theme');
+      body.setAttribute('data-theme', current === 'dark' ? 'light' : 'dark');
+    }
+
+    function exportPDF() {
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF();
+      doc.text(analysisPre.textContent, 10, 10);
+      doc.save('resume_analysis.pdf');
+    }
+  </script>
+</body>
+</html>  
+
+  
+
+
+ 
+
+
+
